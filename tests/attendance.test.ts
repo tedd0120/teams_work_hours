@@ -5,9 +5,13 @@ import dayjs from "dayjs";
 import {
   AttendanceRecord,
   buildAttendanceRecords,
+  buildDailyAverage,
+  buildMonthlyAverage,
   calculateEffectiveWorkday,
   calculateSummary,
   calculateWorkHours,
+  getRecentMonths,
+  getMonthsBetween,
   isInsufficientHours,
   nextMonth
 } from "../src/lib/attendance";
@@ -109,6 +113,77 @@ test("calculateSummary excludes today and handles avg", () => {
   assert.equal(summary.validDays, 1);
   assert.equal(summary.validHours, 9);
   assert.equal(summary.avgHours, 9);
+});
+
+test("getRecentMonths returns the expected range", () => {
+  const months = getRecentMonths(3);
+  assert.equal(months.length, 3);
+  assert.ok(months[0] < months[1]);
+});
+
+test("getMonthsBetween returns inclusive months", () => {
+  const months = getMonthsBetween("2026-01", "2026-03");
+  assert.deepEqual(months, ["2026-01", "2026-02", "2026-03"]);
+});
+
+test("buildMonthlyAverage returns averages per month", () => {
+  const date = dayjs().subtract(1, "day");
+  const month = date.format("YYYY-MM");
+  const dateStr = date.format("YYYY-MM-DD");
+  const records: AttendanceRecord[] = [
+    {
+      date: dateStr,
+      month,
+      isRest: 0,
+      firstDate: `${dateStr} 09:00:00`,
+      endDate: `${dateStr} 18:00:00`,
+      remark: null,
+      remark2: null,
+      workHours: 9,
+      effectiveWorkday: 1,
+      missingClock: false
+    }
+  ];
+  const points = buildMonthlyAverage(records, [month]);
+  assert.equal(points.length, 1);
+  assert.equal(points[0]?.value, 9);
+});
+
+test("buildDailyAverage skips zero workdays and marks half-day", () => {
+  const date = dayjs().subtract(1, "day");
+  const dateStr = date.format("YYYY-MM-DD");
+  const month = date.format("YYYY-MM");
+  const prevDate = date.subtract(1, "day").format("YYYY-MM-DD");
+  const records: AttendanceRecord[] = [
+    {
+      date: dateStr,
+      month,
+      isRest: 0,
+      firstDate: `${dateStr} 09:00:00`,
+      endDate: `${dateStr} 13:00:00`,
+      remark: null,
+      remark2: null,
+      workHours: 4,
+      effectiveWorkday: 0.5,
+      missingClock: false
+    },
+    {
+      date: prevDate,
+      month,
+      isRest: 0,
+      firstDate: null,
+      endDate: null,
+      remark: null,
+      remark2: null,
+      workHours: 0,
+      effectiveWorkday: 0,
+      missingClock: true
+    }
+  ];
+  const points = buildDailyAverage(records, month);
+  assert.equal(points.length, 1);
+  assert.equal(points[0]?.value, 8);
+  assert.equal(points[0]?.isHalfDay, true);
 });
 
 test("isInsufficientHours flags low hours", () => {

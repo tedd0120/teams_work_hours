@@ -30,6 +30,13 @@ export type AttendanceSummary = {
   avgHours: number | null;
 };
 
+export type ChartPoint = {
+  label: string;
+  value: number;
+  date?: string;
+  isHalfDay?: boolean;
+};
+
 const LATE = "迟到";
 const EARLY = "早退";
 const SICK_LEAVE = "病假";
@@ -39,6 +46,28 @@ const HALF_DAY = "半天";
 
 export function nextMonth(ym: string): string {
   return dayjs(`${ym}-01`).add(1, "month").format("YYYY-MM");
+}
+
+export function getRecentMonths(count: number): string[] {
+  const months: string[] = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    months.push(dayjs().subtract(i, "month").format("YYYY-MM"));
+  }
+  return months;
+}
+
+export function getMonthsBetween(startMonth: string, endMonth: string): string[] {
+  const start = dayjs(`${startMonth}-01`);
+  const end = dayjs(`${endMonth}-01`);
+  if (!start.isValid() || !end.isValid() || end.isBefore(start)) {
+    return [];
+  }
+  const diff = end.diff(start, "month");
+  const months: string[] = [];
+  for (let i = 0; i <= diff; i += 1) {
+    months.push(start.add(i, "month").format("YYYY-MM"));
+  }
+  return months;
 }
 
 export function buildAttendanceRecords(
@@ -149,6 +178,41 @@ export function calculateSummary(records: AttendanceRecord[]): AttendanceSummary
     validHours,
     avgHours
   };
+}
+
+export function buildMonthlyAverage(
+  records: AttendanceRecord[],
+  months: string[]
+): ChartPoint[] {
+  return months.map((month) => {
+    const monthRecords = records.filter((record) => record.month === month);
+    const summary = calculateSummary(monthRecords);
+    return {
+      label: month,
+      value: summary.avgHours ?? 0
+    };
+  });
+}
+
+export function buildDailyAverage(
+  records: AttendanceRecord[],
+  month: string
+): ChartPoint[] {
+  const today = dayjs().format("YYYY-MM-DD");
+  return records
+    .filter(
+      (record) =>
+        record.month === month &&
+        record.date < today &&
+        record.effectiveWorkday > 0
+    )
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((record) => ({
+      label: record.date.slice(8, 10),
+      value: roundTo2(record.workHours / record.effectiveWorkday),
+      date: record.date,
+      isHalfDay: record.effectiveWorkday === 0.5
+    }));
 }
 
 export function isInsufficientHours(record: AttendanceRecord): boolean {
