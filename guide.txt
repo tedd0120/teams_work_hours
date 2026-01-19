@@ -1,0 +1,35 @@
+# Role
+你是一位精通 React Native (Expo) 和 Python 的高级全栈工程师。我需要在 Windows 环境下开发一款 iOS App。
+
+# Task
+请阅读并分析附件中的 **`teams工时获取.ipynb`** 文件。
+你的核心任务是将该 Notebook 中的 Python 数据获取逻辑和工时计算算法，完美复刻到一个 **React Native (Expo)** 应用中。
+
+# Tech Stack
+* **开发环境**: Windows 11 (使用 Expo Go 进行 iOS 预览).
+* **框架**: React Native (Expo SDK 50+).
+* **语言**: TypeScript.
+* **样式**: NativeWind (TailwindCSS) 或 StyleSheet (请选择你认为更高效的).
+* **依赖**:
+    * `axios` (网络请求)
+    * `@react-native-async-storage/async-storage` (本地存储)
+    * `date-fns` 或 `dayjs` (日期处理)
+
+# Requirements based on `teams工时获取.ipynb`
+
+1.  **逻辑复刻 (关键)**:
+    * **API 请求**: 请直接提取 Notebook 中的 URL、Header 配置（特别是 `Authorization`）、以及参数传递方式。
+    * **数据清洗**: 请严格照搬 Notebook 中 `parsed_att_date` 函数里的逻辑，特别是：
+        * 工时计算公式。
+        * `calc_workday` 函数中的所有判断分支（假期flag、备注、迟到早退、半天等规则）。
+        * Pandas 的时间差计算 (`dt.total_seconds() / 3600`) 需转换为 JS 的日期计算。
+
+2.  **App UI/UX 功能**:
+    * **设置区**: 提供输入框让用户填写 `emCode` 和 `Authorization`，并使用 `AsyncStorage` 自动保存，无需每次输入。
+    * **控制区**: 一个月份选择器（默认当前月）和一个“查询/刷新”按钮。
+    * **概览仪表盘**: 在页面顶部显著展示 Notebook 中计算出的三个核心指标：
+        * 平均工时
+        * 有效工作日
+        * 总有效工时
+    * **详情列表**: 下方列出每日打卡记录。
+        * 如果某天数据异常（如工时不足或缺卡），请用红色/橙色高亮显示。

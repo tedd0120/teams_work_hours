@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "Teams Work Hours",
+    "slug": "teams-work-hours",
+    "version": "1.0.0",
+    "platforms": ["ios", "android", "web"],
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"]
+  }
+}
