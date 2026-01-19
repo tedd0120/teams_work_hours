@@ -32,7 +32,8 @@ import {
   getMonthsBetween,
   getRecentMonths,
   isInsufficientHours,
-  nextMonth
+  nextMonth,
+  parseThresholdInput
 } from "./src/lib/attendance";
 
 const API_URL = Platform.OS === "web"
@@ -282,10 +283,16 @@ export default function App() {
   const [yearLoading, setYearLoading] = useState(false);
   const [yearError, setYearError] = useState<string | null>(null);
   const [thresholdInput, setThresholdInput] = useState(DEFAULT_THRESHOLD);
+  const [thresholdValid, setThresholdValid] = useState(DEFAULT_THRESHOLD);
+  const [thresholdError, setThresholdError] = useState<string | null>(null);
   const [chartMode, setChartMode] = useState<ChartMode>("year");
   const [activeTab, setActiveTab] = useState<TabKey>("home");
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [yearProgress, setYearProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const colorScheme = useColorScheme();
   const isIOS = Platform.OS === "ios";
   const isDark = isIOS && colorScheme === "dark";
@@ -341,7 +348,13 @@ export default function App() {
         ]);
 
       if (cachedThreshold) {
-        setThresholdInput(cachedThreshold);
+        const parsed = parseThresholdInput(
+          cachedThreshold,
+          DEFAULT_THRESHOLD
+        );
+        setThresholdInput(parsed.normalized);
+        setThresholdValid(parsed.normalized);
+        setThresholdError(null);
       }
 
       if (!cachedEmCode || cachedEmCode !== emCode) {
@@ -372,15 +385,12 @@ export default function App() {
     if (!hydrated) {
       return;
     }
-    AsyncStorage.setItem(STORAGE_THRESHOLD, thresholdInput);
-  }, [hydrated, thresholdInput]);
+    AsyncStorage.setItem(STORAGE_THRESHOLD, thresholdValid);
+  }, [hydrated, thresholdValid]);
 
   const thresholdValue = useMemo(() => {
-    const parsed = Number.parseFloat(thresholdInput);
-    return Number.isFinite(parsed) && parsed > 0
-      ? parsed
-      : Number.parseFloat(DEFAULT_THRESHOLD);
-  }, [thresholdInput]);
+    return parseThresholdInput(thresholdValid, DEFAULT_THRESHOLD).value;
+  }, [thresholdValid]);
   const recentMonths = useMemo(() => getRecentMonths(12), []);
   const rangeMonths = useMemo(
     () => getMonthsBetween(rangeStart, rangeEnd),
@@ -465,6 +475,22 @@ export default function App() {
     [pickerTarget, rangeEnd, rangeStart]
   );
 
+  const handleThresholdChange = useCallback((value: string) => {
+    setThresholdInput(value);
+  }, []);
+
+  const handleThresholdBlur = useCallback(() => {
+    const parsed = parseThresholdInput(thresholdInput, thresholdValid);
+    if (!parsed.valid) {
+      setThresholdError("阈值无效，请输入大于 0 的数字。");
+      setThresholdInput(parsed.normalized);
+      return;
+    }
+    setThresholdValid(parsed.normalized);
+    setThresholdInput(parsed.normalized);
+    setThresholdError(null);
+  }, [thresholdInput, thresholdValid]);
+
   const getAttendanceData = useCallback(
     async (cycle: string) => {
       const headers =
@@ -502,14 +528,17 @@ export default function App() {
 
     setYearLoading(true);
     setYearError(null);
+    setYearProgress({ done: 0, total: recentMonths.length });
 
     try {
       const aggregated: AttendanceRecord[] = [];
-      for (const cycle of recentMonths) {
+      for (let i = 0; i < recentMonths.length; i += 1) {
+        const cycle = recentMonths[i];
         const current = await getAttendanceData(cycle);
         const following = await getAttendanceData(nextMonth(cycle));
         const merged = [...current, ...following];
         aggregated.push(...buildAttendanceRecords(merged, cycle));
+        setYearProgress({ done: i + 1, total: recentMonths.length });
       }
 
       const fetchedAt = dayjs().format("YYYY-MM-DD hh:mm:ss");
@@ -526,6 +555,7 @@ export default function App() {
       setYearError(message);
     } finally {
       setYearLoading(false);
+      setYearProgress(null);
     }
   }, [authorization, emCode, getAttendanceData, recentMonths]);
 
@@ -616,6 +646,11 @@ export default function App() {
                       {yearLoading ? "拉取中..." : "近一年拉取"}
                     </Text>
                   </Pressable>
+                  {yearLoading && yearProgress ? (
+                    <Text style={styles.progressText}>
+                      拉取进度：{yearProgress.done}/{yearProgress.total}
+                    </Text>
+                  ) : null}
                   {yearFetchedAt ? (
                     <Text style={styles.timestampText}>
                       当前使用数据拉取时间为{yearFetchedAt}
@@ -708,17 +743,22 @@ export default function App() {
                         </View>
                       </View>
                       <View style={styles.thresholdRow}>
-                        <Text style={styles.thresholdLabel}>警戒线阈值</Text>
-                        <TextInput
-                          style={styles.thresholdInput}
-                          value={thresholdInput}
-                          onChangeText={setThresholdInput}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                      {chartData.length > 0 ? (
-                        <BarChart
-                          data={chartData}
+                      <Text style={styles.thresholdLabel}>警戒线阈值</Text>
+                      <TextInput
+                        style={styles.thresholdInput}
+                        value={thresholdInput}
+                        onChangeText={handleThresholdChange}
+                        onBlur={handleThresholdBlur}
+                        onSubmitEditing={handleThresholdBlur}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    {thresholdError ? (
+                      <Text style={styles.errorText}>{thresholdError}</Text>
+                    ) : null}
+                    {chartData.length > 0 ? (
+                      <BarChart
+                        data={chartData}
                           threshold={thresholdValue}
                           labelColor={theme.textSecondary}
                           thresholdColor={theme.chartLine}
@@ -765,17 +805,22 @@ export default function App() {
                         </View>
                       </View>
                       <View style={styles.thresholdRow}>
-                        <Text style={styles.thresholdLabel}>警戒线阈值</Text>
-                        <TextInput
-                          style={styles.thresholdInput}
-                          value={thresholdInput}
-                          onChangeText={setThresholdInput}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                      {chartData.length > 0 ? (
-                        <BarChart
-                          data={chartData}
+                      <Text style={styles.thresholdLabel}>警戒线阈值</Text>
+                      <TextInput
+                        style={styles.thresholdInput}
+                        value={thresholdInput}
+                        onChangeText={handleThresholdChange}
+                        onBlur={handleThresholdBlur}
+                        onSubmitEditing={handleThresholdBlur}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    {thresholdError ? (
+                      <Text style={styles.errorText}>{thresholdError}</Text>
+                    ) : null}
+                    {chartData.length > 0 ? (
+                      <BarChart
+                        data={chartData}
                           threshold={thresholdValue}
                           labelColor={theme.textSecondary}
                           thresholdColor={theme.chartLine}
@@ -1115,6 +1160,11 @@ const createStyles = (theme: Theme) =>
       minWidth: 80
     },
     timestampText: {
+      marginTop: 8,
+      fontSize: 12,
+      color: theme.textSecondary
+    },
+    progressText: {
       marginTop: 8,
       fontSize: 12,
       color: theme.textSecondary

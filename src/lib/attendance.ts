@@ -37,6 +37,12 @@ export type ChartPoint = {
   isHalfDay?: boolean;
 };
 
+export type ThresholdParseResult = {
+  value: number;
+  normalized: string;
+  valid: boolean;
+};
+
 const LATE = "迟到";
 const EARLY = "早退";
 const SICK_LEAVE = "病假";
@@ -224,6 +230,32 @@ export function isInsufficientHours(record: AttendanceRecord): boolean {
 
 export function formatHours(value: number): string {
   return roundTo2(value).toFixed(2);
+}
+
+export function parseThresholdInput(
+  input: string,
+  fallback: string
+): ThresholdParseResult {
+  const trimmed = input.trim();
+  const parsed = Number.parseFloat(trimmed);
+  if (!trimmed || !Number.isFinite(parsed) || parsed <= 0) {
+    const fallbackParsed = Number.parseFloat(fallback);
+    const safeFallback = Number.isFinite(fallbackParsed) && fallbackParsed > 0
+      ? fallbackParsed
+      : INSUFFICIENT_HOURS_THRESHOLD;
+    return {
+      value: safeFallback,
+      normalized: Number.isFinite(fallbackParsed) && fallbackParsed > 0
+        ? fallback
+        : INSUFFICIENT_HOURS_THRESHOLD.toString(),
+      valid: false
+    };
+  }
+  return {
+    value: parsed,
+    normalized: trimmed,
+    valid: true
+  };
 }
 
 function roundTo2(value: number): number {

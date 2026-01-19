@@ -13,7 +13,8 @@ import {
   getRecentMonths,
   getMonthsBetween,
   isInsufficientHours,
-  nextMonth
+  nextMonth,
+  parseThresholdInput
 } from "../src/lib/attendance";
 
 test("nextMonth returns the following month", () => {
@@ -200,4 +201,25 @@ test("isInsufficientHours flags low hours", () => {
     missingClock: false
   };
   assert.equal(isInsufficientHours(record), true);
+});
+
+test("parseThresholdInput accepts valid positive input", () => {
+  const result = parseThresholdInput("11.5", "10.5");
+  assert.equal(result.valid, true);
+  assert.equal(result.value, 11.5);
+  assert.equal(result.normalized, "11.5");
+});
+
+test("parseThresholdInput falls back on invalid input", () => {
+  const result = parseThresholdInput("", "10.5");
+  assert.equal(result.valid, false);
+  assert.equal(result.value, 10.5);
+  assert.equal(result.normalized, "10.5");
+});
+
+test("parseThresholdInput falls back to default on invalid fallback", () => {
+  const result = parseThresholdInput("abc", "-1");
+  assert.equal(result.valid, false);
+  assert.equal(result.value, 10.5);
+  assert.equal(result.normalized, "10.5");
 });
